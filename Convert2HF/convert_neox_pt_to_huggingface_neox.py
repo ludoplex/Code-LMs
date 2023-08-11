@@ -8,10 +8,11 @@ from transformers import GPTNeoXConfig, GPTNeoXForCausalLM, GPT2Tokenizer
 def get_hf_state_dict_from_pt_files(checkpoint_dir):
     layer_files = []
     for root, dirs, files in os.walk(checkpoint_dir):
-        for file in files:
-            if file.startswith("layer_"):
-                # print(file)
-                layer_files.append(os.path.join(root, file))
+        layer_files.extend(
+            os.path.join(root, file)
+            for file in files
+            if file.startswith("layer_")
+        )
     layer_files = sorted(layer_files)
 
     layer_id = -1
@@ -29,7 +30,7 @@ def get_hf_state_dict_from_pt_files(checkpoint_dir):
                 if new_layer:
                     layer_id += 1
                     new_layer = False
-                new_key = "gpt_neox.layers." + str(layer_id) + "." + key
+                new_key = f"gpt_neox.layers.{str(layer_id)}.{key}"
                 state_dict[new_key] = value
             elif key.startswith("norm."):
                 new_key = "gpt_neox.final_layer_norm." + key.split(".")[-1]
@@ -81,4 +82,4 @@ if __name__ == "__main__":
     print(f"Save HuggingFace model to {args.hf_save_dir} ...")
     model.save_pretrained(args.hf_save_dir)
     tokenizer.save_pretrained(args.hf_save_dir)
-    print(f"Finished.")
+    print("Finished.")
