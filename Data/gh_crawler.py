@@ -20,8 +20,8 @@ def main():
 			if not results:
 				break
 			new_repositories = [repository for repository, _ in results]
-			next_max_stars = min([stars for _, stars in results])
-			
+			next_max_stars = min(stars for _, stars in results)
+
 			# If a query returns no new repositories, drop it.
 			if len(repositories | set(new_repositories)) == len(repositories):
 				break
@@ -36,14 +36,14 @@ def main():
 def run_query(max_stars):
 	end_cursor = None  # Used to track pagination.
 	repositories = set()
-	
+
 	while end_cursor != "":
 		# Extracts non-fork, recently active repositories in the provided language, in groups of 100.
 		# Leaves placeholders for maximum stars and page cursor. The former allows us to retrieve more than 1,000 repositories
 		# by repeatedly lowering the bar.
 		query = f"""
 		{{
-		  search(query: "language:{LANGUAGE} fork:false pushed:>{LAST_ACTIVE} sort:stars stars:<{max_stars}", type: REPOSITORY, first: 100 {', after: "' + end_cursor + '"' if end_cursor else ''}) {{
+		  search(query: "language:{LANGUAGE} fork:false pushed:>{LAST_ACTIVE} sort:stars stars:<{max_stars}", type: REPOSITORY, first: 100 {f', after: "{end_cursor}"' if end_cursor else ''}) {{
 			edges {{
 			  node {{
 				... on Repository {{
@@ -71,16 +71,13 @@ def run_query(max_stars):
 		while not success and attempts < 3:
 			request = requests.post('https://api.github.com/graphql', json={'query': query}, headers=headers)
 			content = request.json()
-			if 'data' not in content or 'search' not in content['data']:
-				# If this is simply a signal to pause querying, wait two minutes.
-				if 'message' in content and 'wait' in content['message']:
-					attempts += 1
-					time.sleep(120)
-				# Otherwise, assume we've hit the end of the stream.
-				else:
-					break
-			else:
+			if 'data' in content and 'search' in content['data']:
 				success = True
+			elif 'message' in content and 'wait' in content['message']:
+				attempts += 1
+				time.sleep(120)
+			else:
+				break
 		if not success:
 			break
 		end_cursor = get_end_cursor(content)
@@ -94,9 +91,7 @@ def run_query(max_stars):
 def get_end_cursor(content):
 	page_info = content['data']['search']['pageInfo']
 	has_next_page = page_info['hasNextPage']
-	if has_next_page:
-		return page_info['endCursor']
-	return ""
+	return page_info['endCursor'] if has_next_page else ""
 
 
 def get_repositories(content):
